@@ -2,7 +2,7 @@
  * -\-\-
  * DBeam Core
  * --
- * Copyright (C) 2016 - 2018 Spotify AB
+ * Copyright (C) 2016 - 2019 Spotify AB
  * --
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ package com.spotify.dbeam.jobs;
 
 import com.google.api.client.util.Preconditions;
 
+import com.spotify.dbeam.DBeamException;
 import com.spotify.dbeam.args.JdbcExportArgs;
 
 import java.sql.Connection;
@@ -64,13 +65,13 @@ public class PsqlReplicationCheck {
         "Partition parameter must be defined");
   }
 
-  public void checkReplication() throws Exception {
+  public void checkReplication() throws DBeamException, NotReadyException {
     if (isReplicationDelayed()) {
       throw new NotReadyException("PostgreSQL replication is late");
     }
   }
 
-  public boolean isReplicationDelayed() throws Exception {
+  public boolean isReplicationDelayed() throws DBeamException {
     return isReplicationDelayed(
         this.jdbcExportArgs.queryBuilderArgs().partition().get(),
         queryReplication(),
@@ -98,10 +99,12 @@ public class PsqlReplicationCheck {
     return lastReplication;
   }
 
-  DateTime queryReplication() throws Exception {
+  DateTime queryReplication() throws DBeamException {
     LOGGER.info("Checking PostgreSQL replication lag...");
     try (Connection connection = this.jdbcExportArgs.createConnection()) {
       return queryReplication(connection, replicationQuery);
+    } catch (SQLException e) {
+      throw new DBeamException("Failed to query replication", e);
     }
   }
 

@@ -20,10 +20,12 @@
 
 package com.spotify.dbeam.avro;
 
+import com.spotify.dbeam.DBeamException;
 import com.spotify.dbeam.args.JdbcExportArgs;
 import com.spotify.dbeam.options.JobNameConfiguration;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Collections;
 
 import org.apache.avro.Schema;
@@ -40,7 +42,13 @@ public class BeamJdbcAvroSchema {
 
   private static Logger LOGGER = LoggerFactory.getLogger(BeamJdbcAvroSchema.class);
 
-  public static Schema createSchema(Pipeline pipeline, JdbcExportArgs args) throws Exception {
+  /**
+   * Create AVRO schema of the table currently being exported in this job by reading one record.
+   * Also Exposes the time taken to create the schema as a counter.
+   *
+   * <p>The job name is set from here since it depends on the dbName
+   */
+  public static Schema createSchema(Pipeline pipeline, JdbcExportArgs args) throws DBeamException {
     Schema generatedSchema;
     String dbName;
     final long startTimeMillis = System.currentTimeMillis();
@@ -48,12 +56,15 @@ public class BeamJdbcAvroSchema {
       final String dbUrl = connection.getMetaData().getURL();
       final String avroDoc = args.avroDoc().orElseGet(() ->
           String.format("Generate schema from JDBC ResultSet from %s %s",
-                                             args.queryBuilderArgs().tableName(),
-                                             dbUrl));
+              args.queryBuilderArgs().tableName(),
+              dbUrl));
       dbName = connection.getCatalog();
       generatedSchema = JdbcAvroSchema.createSchemaByReadingOneRow(
           connection, args.queryBuilderArgs().tableName(),
           args.avroSchemaNamespace(), avroDoc, args.useAvroLogicalTypes());
+    } catch (SQLException e) {
+      LOGGER.error(e.getMessage());
+      throw new DBeamException("Failed to create AVRO schema for given table", e);
     }
     final long elapsedTimeSchema = System.currentTimeMillis() - startTimeMillis;
     LOGGER.info("Elapsed time to schema {} seconds", elapsedTimeSchema / 1000.0);
@@ -62,16 +73,16 @@ public class BeamJdbcAvroSchema {
         pipeline.getOptions(), dbName, args.queryBuilderArgs().tableName());
     final Counter cnt =
         Metrics.counter(BeamJdbcAvroSchema.class.getCanonicalName(),
-                        "schemaElapsedTimeMs");
+            "schemaElapsedTimeMs");
     pipeline
         .apply("ExposeSchemaCountersSeed",
-               Create.of(Collections.singletonList(0))
-                   .withType(TypeDescriptors.integers()))
+            Create.of(Collections.singletonList(0))
+                .withType(TypeDescriptors.integers()))
         .apply("ExposeSchemaCounters",
-               MapElements.into(TypeDescriptors.integers()).via(v -> {
-                 cnt.inc(elapsedTimeSchema);
-                 return v;
-               }));
+            MapElements.into(TypeDescriptors.integers()).via(v -> {
+              cnt.inc(elapsedTimeSchema);
+              return v;
+            }));
     return generatedSchema;
   }
 

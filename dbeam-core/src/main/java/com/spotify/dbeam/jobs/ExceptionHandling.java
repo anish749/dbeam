@@ -21,11 +21,10 @@
 package com.spotify.dbeam.jobs;
 
 import com.google.common.collect.ImmutableMap;
-
+import com.spotify.dbeam.DBeamException;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.Map;
-
 import org.apache.beam.sdk.Pipeline;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,13 +34,14 @@ public class ExceptionHandling {
   private static Logger LOGGER = LoggerFactory.getLogger(ExceptionHandling.class);
 
   private static final Map<Class<? extends Throwable>, Integer> EXIT_CODES =
-      ImmutableMap.of(
-          NotReadyException.class, 20,
-          IOException.class, 41,
-          IllegalArgumentException.class, 43,
-          SQLException.class, 45,
-          Pipeline.PipelineExecutionException.class, 47
-      );
+      ImmutableMap.<Class<? extends Throwable>, Integer>builder()
+          .put(NotReadyException.class, 20)
+          .put(IOException.class, 41)
+          .put(IllegalArgumentException.class, 43)
+          .put(SQLException.class, 45)
+          .put(DBeamException.class, 45)
+          .put(Pipeline.PipelineExecutionException.class, 47)
+          .build();
 
   public static void handleException(Throwable e) {
     LOGGER.error("Failure: ", e);

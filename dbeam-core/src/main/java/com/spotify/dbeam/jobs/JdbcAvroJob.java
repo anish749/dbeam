@@ -2,7 +2,7 @@
  * -\-\-
  * DBeam Core
  * --
- * Copyright (C) 2016 - 2018 Spotify AB
+ * Copyright (C) 2016 - 2019 Spotify AB
  * --
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@
 package com.spotify.dbeam.jobs;
 
 import com.google.common.base.Preconditions;
-
+import com.spotify.dbeam.DBeamException;
 import com.spotify.dbeam.args.JdbcExportArgs;
 import com.spotify.dbeam.avro.BeamJdbcAvroSchema;
 import com.spotify.dbeam.avro.JdbcAvroIO;
@@ -30,12 +30,11 @@ import com.spotify.dbeam.beam.MetricsHelper;
 import com.spotify.dbeam.options.JdbcExportArgsFactory;
 import com.spotify.dbeam.options.JdbcExportPipelineOptions;
 import com.spotify.dbeam.options.OutputOptions;
-
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
-
 import org.apache.avro.Schema;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
@@ -83,17 +82,29 @@ public class JdbcAvroJob {
     return PipelineOptionsFactory.fromArgs(cmdLineArgs).withValidation().create();
   }
 
-  public void prepareExport() throws Exception {
+  /**
+   * Create a Beam Pipeline for the export.
+   *
+   * @throws DBeamException When it fails to create schema / queries as required for this job.
+   * @throws IOException When it fails to write queries / schema to target
+   */
+  private void prepareExport() throws DBeamException, IOException {
     final Schema generatedSchema = BeamJdbcAvroSchema.createSchema(
         this.pipeline, jdbcExportArgs);
     BeamHelper.saveStringOnSubPath(output, "/_AVRO_SCHEMA.avsc", generatedSchema.toString(true));
-    final List<String> queries = StreamSupport.stream(
-        jdbcExportArgs
-            .queryBuilderArgs()
-            .buildQueries(jdbcExportArgs.createConnection())
-            .spliterator(),
-        false)
-        .collect(Collectors.toList());
+
+    List<String> queries;
+    try {
+      queries = StreamSupport.stream(
+          jdbcExportArgs
+              .queryBuilderArgs()
+              .buildQueries(jdbcExportArgs.createConnection())
+              .spliterator(),
+          false)
+          .collect(Collectors.toList());
+    } catch (SQLException s) {
+      throw new DBeamException("Failed to created queries for export: ", s);
+    }
 
     for (int i = 0; i < queries.size(); i++) {
       BeamHelper.saveStringOnSubPath(output, String.format("/_queries/query_%d.sql", i),

@@ -2,7 +2,7 @@
  * -\-\-
  * DBeam Core
  * --
- * Copyright (C) 2016 - 2018 Spotify AB
+ * Copyright (C) 2016 - 2019 Spotify AB
  * --
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.DriverManager;
 
+import java.sql.SQLException;
 import javax.annotation.Nullable;
 
 /**
@@ -79,7 +80,7 @@ public abstract class JdbcConnectionArgs implements Serializable {
     return builder().setPassword(password).build();
   }
 
-  public Connection createConnection() throws Exception {
+  public Connection createConnection() throws SQLException, ClassNotFoundException {
     Class.forName(driverClassName());
     Connection connection = DriverManager.getConnection(url(), username(), password());
     connection.setAutoCommit(false);

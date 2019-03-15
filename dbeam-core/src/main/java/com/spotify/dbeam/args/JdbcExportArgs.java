@@ -2,7 +2,7 @@
  * -\-\-
  * DBeam Core
  * --
- * Copyright (C) 2016 - 2018 Spotify AB
+ * Copyright (C) 2016 - 2019 Spotify AB
  * --
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,9 +21,10 @@
 package com.spotify.dbeam.args;
 
 import com.google.auto.value.AutoValue;
-
+import com.spotify.dbeam.DBeamException;
 import java.io.Serializable;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Optional;
 
 @AutoValue
@@ -75,8 +76,12 @@ public abstract class JdbcExportArgs implements Serializable {
         .build();
   }
 
-  public Connection createConnection() throws Exception {
-    return this.jdbcAvroOptions().jdbcConnectionConfiguration().createConnection();
+  public Connection createConnection() throws DBeamException {
+    try {
+      return this.jdbcAvroOptions().jdbcConnectionConfiguration().createConnection();
+    } catch (SQLException | ClassNotFoundException e) {
+      throw new DBeamException("Failed to create connection to Database:", e);
+    }
   }
 
 }
